@@ -8,7 +8,7 @@
 
 ## 你会得到什么
 
-每日或每周推送到你常用的通讯工具（Telegram、Discord、WhatsApp 等），包含：
+每日或每周推送到你常用的通讯工具（Telegram、Discord、WhatsApp 等）或通过 Gmail 发送到你自定义的邮件列表。支持 Windows、macOS 和 Linux。内容包含：
 
 - 顶级 AI 播客新节目的精华摘要
 - 25 位精选 AI 建造者在 X/Twitter 上的关键观点和洞察
@@ -25,7 +25,7 @@
 Agent 会询问你：
 - 推送频率（每日或每周）和时间
 - 语言偏好
-- 推送方式（Telegram、邮件或直接在聊天中显示）
+- 推送方式（Telegram、Gmail 邮件群发到你的邮件列表，或直接在聊天中显示）
 
 不需要任何 API key——所有内容由中心化服务统一抓取。
 设置完成后，你的第一期摘要会立即推送。
@@ -109,10 +109,15 @@ cd ~/.claude/skills/follow-builders/scripts && npm install
 
 查看 [examples/sample-digest.md](examples/sample-digest.md) 了解输出示例。
 
+## 补发错过的摘要
+
+如果你的设备在计划推送时间处于关机状态，可以输入 `/ai catch-up` 来获取自上次推送以来所有错过的内容。中心化 feed 保留约 7 天的历史记录——超过这个时间范围的内容无法找回。
+
 ## 隐私
 
 - 不发送任何 API key——所有内容由中心化服务获取
-- 如果你使用 Telegram/邮件推送，相关 key 仅存储在本地 `~/.follow-builders/.env`
+- 如果你使用 Telegram/邮件推送，相关凭证仅存储在本地 `~/.follow-builders/.env`（Gmail 应用专用密码或 Telegram bot token——不是你的主密码）
+- 邮件收件人列表仅存储在本地 `~/.follow-builders/mailing-list.txt`
 - Skill 只读取公开内容（公开的博客文章、YouTube 视频和 X 帖子）
 - 你的配置、偏好和阅读记录都保留在你自己的设备上
 
