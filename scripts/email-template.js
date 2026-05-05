@@ -23,13 +23,13 @@ export function buildHtmlEmail(digestText) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    if (line === line.toUpperCase() && /[A-Z]/.test(line)) {
+    if (line === line.toUpperCase() && /[A-Z]/.test(line) && !/^https?:\/\/\S+$/.test(line)) {
       parts.push(
         `<h2 style="font-family:-apple-system,sans-serif;font-size:11px;letter-spacing:0.1em;` +
         `text-transform:uppercase;color:${MUTED};border-bottom:1px solid ${BORDER};` +
         `padding-bottom:8px;margin:32px 0 16px;">${escapeHtml(line)}</h2>`
       );
-    } else if (line.startsWith('http')) {
+    } else if (/^https?:\/\/\S+$/.test(line)) {
       parts.push(
         `<p style="margin:4px 0 12px;">` +
         `<a href="${escapeHtml(line)}" style="color:${CORAL};text-decoration:none;` +

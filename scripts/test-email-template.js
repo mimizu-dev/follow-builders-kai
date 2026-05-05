@@ -1,7 +1,5 @@
 import assert from 'assert';
 
-// buildHtmlEmail doesn't exist yet — this file will fail to import.
-// Run it now to confirm the failure before writing the implementation.
 import { buildHtmlEmail } from './email-template.js';
 
 // Test 1: subject extracted from first line
