@@ -142,6 +142,13 @@ async function sendEmailLocal(text, gmailUser, appPassword, recipients) {
       });
       results.sent++;
     } catch (err) {
+      if (err.responseCode === 535 || /Invalid login|authentication failed/i.test(err.message)) {
+        throw new Error(
+          'Gmail authentication failed. Check GMAIL_USER and GMAIL_APP_PASSWORD in ' +
+          '~/.follow-builders/.env. App passwords require 2FA to be enabled on your Google account. ' +
+          'Generate one at: Google Account → Security → 2-Step Verification → App passwords'
+        );
+      }
       results.failed++;
       results.errors.push(`${to}: ${err.message}`);
     }

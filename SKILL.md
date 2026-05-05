@@ -77,7 +77,7 @@ Tell the user:
 when you're not in this terminal. You have two options:
 
 1. **Telegram** — I'll send it as a Telegram message (free, takes ~5 min to set up)
-2. **Email** — I'll email it to you (requires a free Resend account)
+2. **Email** — I'll email it to you via Gmail (requires a Gmail account with 2FA enabled)
 
 Or you can skip this and just type /ai whenever you want your digest — but it
 won't arrive automatically."
@@ -113,6 +113,8 @@ Ask for initial mailing list recipients:
 "Who should receive this digest? Enter one email address per line (press Enter twice when done — it can be just you)."
 
 Collect the addresses and write them to ~/.follow-builders/mailing-list.txt (one per line).
+
+Then run: `cd ${CLAUDE_SKILL_DIR}/scripts && npm install` to ensure all dependencies are installed.
 
 **If they choose on-demand:**
 Set `delivery.method` to `"stdout"`. Tell them: "No problem — just type /ai
