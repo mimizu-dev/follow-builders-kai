@@ -1,6 +1,5 @@
 import assert from 'assert';
 import { writeFile, mkdir, rm } from 'fs/promises';
-import { existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 

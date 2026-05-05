@@ -200,16 +200,17 @@ async function main() {
         }
 
         const results = await sendEmailLocal(digestText, gmailUser, appPassword, recipients);
-        await updateLastDelivered(CONFIG_PATH);
 
         if (results.failed === 0) {
+          await updateLastDelivered(CONFIG_PATH);
           console.log(JSON.stringify({
             status: 'ok',
             method: 'email',
             sent: results.sent,
             message: `Digest sent to ${results.sent} recipient(s)`
           }));
-        } else {
+        } else if (results.sent > 0) {
+          await updateLastDelivered(CONFIG_PATH);
           console.log(JSON.stringify({
             status: 'partial',
             method: 'email',
@@ -217,6 +218,15 @@ async function main() {
             failed: results.failed,
             errors: results.errors
           }));
+        } else {
+          console.log(JSON.stringify({
+            status: 'error',
+            method: 'email',
+            sent: 0,
+            failed: results.failed,
+            errors: results.errors
+          }));
+          process.exit(1);
         }
         break;
       }
@@ -236,4 +246,6 @@ async function main() {
   }
 }
 
-main();
+if (process.argv[1] === new URL(import.meta.url).pathname) {
+  main();
+}
