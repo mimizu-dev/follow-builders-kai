@@ -38,7 +38,7 @@ prepare-digest.js ──► Agent remix ──► deliver.js
 | `scripts/deliver.js` | Replace `sendEmail()` (Resend) with `sendEmailLocal()` (nodemailer + mailing list loop) |
 | `scripts/email-template.js` | New — converts plain-text digest to Claude-styled HTML |
 | `scripts/package.json` | Add `nodemailer` dependency |
-| `config/config-schema.json` | Update email delivery field docs (remove Resend reference) |
+| `config/config-schema.json` | Update email delivery field docs (remove Resend reference), add `lastDeliveredAt` field |
 | `SKILL.md` | Update Step 3 onboarding: Gmail app password setup instead of Resend |
 | `README.md` | Update delivery section to reflect Gmail SMTP + mailing list |
 | `README.zh-CN.md` | Same updates in Chinese |
@@ -168,6 +168,52 @@ Step 3 (Delivery Method) — Email branch replaces Resend instructions with:
 5. Write addresses to `~/.follow-builders/mailing-list.txt`
 6. Run `cd scripts && npm install` to ensure nodemailer is installed
 
+## Manual Catch-Up (`/ai catch-up`)
+
+### Problem
+
+The NUC running Hermes Agents may not be on 24/7. When offline, scheduled digests are missed. The user needs a way to manually retrieve missed content when they return.
+
+### Approach
+
+Add a `/ai catch-up` command that generates and emails a catch-up digest on demand, covering all unseen content since the last successful delivery. Uses the existing `state-feed.json` deduplication mechanism — tweet IDs seen in past digests are already tracked there, so unseen content from the feed's rolling window (~7 days) surfaces naturally.
+
+### Last Delivery Tracking
+
+Add `lastDeliveredAt` (ISO 8601 timestamp) to `~/.follow-builders/config.json`, written by `deliver.js` on every successful email send:
+
+```json
+{
+  "lastDeliveredAt": "2026-05-03T08:00:00.000Z"
+}
+```
+
+### Catch-Up Digest Behavior
+
+When the user says `/ai catch-up` or "send me what I missed":
+
+1. Read `lastDeliveredAt` from config — compute days since last delivery
+2. Run `prepare-digest.js` as normal (fetches current feed)
+3. The feed already contains unseen content (not in `state-feed.json`) from the rolling window
+4. Generate digest with a catch-up header: `"AI Builders Digest — Catch-Up (missed N days, since [date])"`
+5. Deliver via the normal email path (mailing list)
+6. Update `lastDeliveredAt` after successful delivery
+
+### Feed Window Limitation
+
+The central feed keeps a rolling ~7-day window. If the NUC is offline longer than that, content older than 7 days is permanently unavailable from the feed. The catch-up digest covers whatever is in the current window — not a guaranteed full history. This limitation is documented in the README.
+
+### SKILL.md Addition
+
+Add to the "Manual Trigger" section:
+
+> **Catch-up mode:** If the user says `/ai catch-up`, "send me what I missed", or similar:
+> 1. Read `lastDeliveredAt` from config.json and compute the gap
+> 2. Tell the user: "You've missed N days of digests (since [date]). Fetching everything available now..."
+> 3. Run the full digest workflow — the feed naturally surfaces unseen content
+> 4. Use the catch-up header format in the digest title
+> 5. Deliver via email as normal
+
 ## README Updates
 
 Both `README.md` and `README.zh-CN.md` — update the "Delivery" / "Quick Start" section:
@@ -175,3 +221,4 @@ Both `README.md` and `README.zh-CN.md` — update the "Delivery" / "Quick Start"
 - Add Gmail SMTP + app password setup instructions
 - Add mailing list description (`mailing-list.txt`)
 - Note Windows 11 compatibility
+- Add catch-up command documentation: `/ai catch-up` for missed digests, with note on 7-day feed window limit
