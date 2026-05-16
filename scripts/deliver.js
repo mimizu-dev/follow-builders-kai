@@ -1,56 +1,29 @@
 #!/usr/bin/env node
 
-// ============================================================================
-// Follow Builders — Delivery Script
-// ============================================================================
-// Sends a digest to the user via their chosen delivery method.
-// Supports: Telegram bot, Email (via Resend), or stdout (default).
-//
-// Usage:
-//   echo "digest text" | node deliver.js
-//   node deliver.js --message "digest text"
-//   node deliver.js --file /path/to/digest.txt
-//
-// The script reads delivery config from ~/.follow-builders/config.json
-// and API keys from ~/.follow-builders/.env
-//
-// Delivery methods:
-//   - "telegram": sends via Telegram Bot API (needs TELEGRAM_BOT_TOKEN + chat ID)
-//   - "email": sends via Resend API (needs RESEND_API_KEY + email address)
-//   - "stdout" (default): just prints to terminal
-// ============================================================================
-
-import { readFile } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { config as loadEnv } from 'dotenv';
 
-// -- Constants ---------------------------------------------------------------
-
 const USER_DIR = join(homedir(), '.follow-builders');
 const CONFIG_PATH = join(USER_DIR, 'config.json');
 const ENV_PATH = join(USER_DIR, '.env');
+const MAILING_LIST_PATH = join(USER_DIR, 'mailing-list.txt');
 
-// -- Read input --------------------------------------------------------------
-
-// The digest text can come from stdin, --message flag, or --file flag
 async function getDigestText() {
   const args = process.argv.slice(2);
 
-  // Check --message flag
   const msgIdx = args.indexOf('--message');
   if (msgIdx !== -1 && args[msgIdx + 1]) {
     return args[msgIdx + 1];
   }
 
-  // Check --file flag
   const fileIdx = args.indexOf('--file');
   if (fileIdx !== -1 && args[fileIdx + 1]) {
     return await readFile(args[fileIdx + 1], 'utf-8');
   }
 
-  // Read from stdin
   const chunks = [];
   for await (const chunk of process.stdin) {
     chunks.push(chunk);
@@ -58,14 +31,7 @@ async function getDigestText() {
   return Buffer.concat(chunks).toString('utf-8');
 }
 
-// -- Telegram Delivery -------------------------------------------------------
-
-// Sends the digest via Telegram Bot API.
-// The user creates a bot via @BotFather and provides the token.
-// The chat ID is obtained when the user sends their first message to the bot.
 async function sendTelegram(text, botToken, chatId) {
-  // Telegram has a 4096 character limit per message.
-  // If the digest is longer, we split it into chunks.
   const MAX_LEN = 4000;
   const chunks = [];
   let remaining = text;
@@ -74,7 +40,6 @@ async function sendTelegram(text, botToken, chatId) {
       chunks.push(remaining);
       break;
     }
-    // Try to split at a newline near the limit
     let splitAt = remaining.lastIndexOf('\n', MAX_LEN);
     if (splitAt < MAX_LEN * 0.5) splitAt = MAX_LEN;
     chunks.push(remaining.slice(0, splitAt));
@@ -98,7 +63,6 @@ async function sendTelegram(text, botToken, chatId) {
 
     if (!res.ok) {
       const err = await res.json();
-      // If Markdown parsing fails, retry without parse_mode
       if (err.description && err.description.includes("can't parse")) {
         await fetch(
           `https://api.telegram.org/bot${botToken}/sendMessage`,
@@ -117,42 +81,83 @@ async function sendTelegram(text, botToken, chatId) {
       }
     }
 
-    // Small delay between chunks to avoid rate limiting
     if (chunks.length > 1) await new Promise(r => setTimeout(r, 500));
   }
 }
 
-// -- Email Delivery (Resend) -------------------------------------------------
-
-// Sends the digest via Resend's email API.
-// The user provides their own Resend API key and email address.
-async function sendEmail(text, apiKey, toEmail) {
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      from: 'AI Builders Digest <digest@resend.dev>',
-      to: [toEmail],
-      subject: `AI Builders Digest — ${new Date().toLocaleDateString('en-US', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-      })}`,
-      text: text
-    })
-  });
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(`Resend API error: ${err.message || JSON.stringify(err)}`);
+export async function readMailingList(filePath) {
+  try {
+    const content = await readFile(filePath, 'utf-8');
+    return content
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0 && !l.startsWith('#'));
+  } catch {
+    return [];
   }
 }
 
-// -- Main --------------------------------------------------------------------
+export async function resolveRecipients(mailingListPath, configEmail) {
+  const fromList = await readMailingList(mailingListPath);
+  if (fromList.length > 0) return fromList;
+  if (configEmail) return [configEmail];
+  return [];
+}
+
+export async function updateLastDelivered(configPath) {
+  try {
+    let cfg = {};
+    if (existsSync(configPath)) {
+      cfg = JSON.parse(await readFile(configPath, 'utf-8'));
+    }
+    cfg.lastDeliveredAt = new Date().toISOString();
+    await writeFile(configPath, JSON.stringify(cfg, null, 2));
+  } catch {
+    // non-fatal: timestamp write failure must not break delivery
+  }
+}
+
+async function sendEmailLocal(text, gmailUser, appPassword, recipients) {
+  const { default: nodemailer } = await import('nodemailer');
+  const { buildHtmlEmail } = await import('./email-template.js');
+
+  const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: { user: gmailUser, pass: appPassword }
+  });
+
+  const { html, subject } = buildHtmlEmail(text);
+  const results = { sent: 0, failed: 0, errors: [] };
+
+  for (const to of recipients) {
+    try {
+      await transporter.sendMail({
+        from: `AI Builders Digest <${gmailUser}>`,
+        to,
+        subject,
+        html,
+        text
+      });
+      results.sent++;
+    } catch (err) {
+      if (err.responseCode === 535 || /Invalid login|authentication failed/i.test(err.message)) {
+        throw new Error(
+          'Gmail authentication failed. Check GMAIL_USER and GMAIL_APP_PASSWORD in ' +
+          '~/.follow-builders/.env. App passwords require 2FA to be enabled on your Google account. ' +
+          'Generate one at: Google Account → Security → 2-Step Verification → App passwords'
+        );
+      }
+      results.failed++;
+      results.errors.push(`${to}: ${err.message}`);
+    }
+  }
+
+  return results;
+}
 
 async function main() {
-  // Load env and config
   loadEnv({ path: ENV_PATH });
 
   let config = {};
@@ -185,22 +190,56 @@ async function main() {
       }
 
       case 'email': {
-        const apiKey = process.env.RESEND_API_KEY;
-        const toEmail = delivery.email;
-        if (!apiKey) throw new Error('RESEND_API_KEY not found in .env');
-        if (!toEmail) throw new Error('delivery.email not found in config.json');
-        await sendEmail(digestText, apiKey, toEmail);
-        console.log(JSON.stringify({
-          status: 'ok',
-          method: 'email',
-          message: `Digest sent to ${toEmail}`
-        }));
+        const gmailUser = process.env.GMAIL_USER;
+        const appPassword = process.env.GMAIL_APP_PASSWORD;
+        if (!gmailUser) throw new Error('GMAIL_USER not found in .env');
+        if (!appPassword) throw new Error(
+          'GMAIL_APP_PASSWORD not found in .env. ' +
+          'Generate one at: Google Account → Security → 2-Step Verification → App passwords'
+        );
+
+        const recipients = await resolveRecipients(MAILING_LIST_PATH, delivery.email);
+        if (recipients.length === 0) {
+          throw new Error(
+            'No recipients configured. ' +
+            'Add addresses to ~/.follow-builders/mailing-list.txt or set delivery.email in config.json'
+          );
+        }
+
+        const results = await sendEmailLocal(digestText, gmailUser, appPassword, recipients);
+
+        if (results.failed === 0) {
+          await updateLastDelivered(CONFIG_PATH);
+          console.log(JSON.stringify({
+            status: 'ok',
+            method: 'email',
+            sent: results.sent,
+            message: `Digest sent to ${results.sent} recipient(s)`
+          }));
+        } else if (results.sent > 0) {
+          await updateLastDelivered(CONFIG_PATH);
+          console.log(JSON.stringify({
+            status: 'partial',
+            method: 'email',
+            sent: results.sent,
+            failed: results.failed,
+            errors: results.errors
+          }));
+        } else {
+          console.log(JSON.stringify({
+            status: 'error',
+            method: 'email',
+            sent: 0,
+            failed: results.failed,
+            errors: results.errors
+          }));
+          process.exit(1);
+        }
         break;
       }
 
       case 'stdout':
       default:
-        // Just print to terminal — the agent or OpenClaw handles delivery
         console.log(digestText);
         break;
     }
@@ -214,4 +253,6 @@ async function main() {
   }
 }
 
-main();
+if (process.argv[1] === new URL(import.meta.url).pathname) {
+  main();
+}

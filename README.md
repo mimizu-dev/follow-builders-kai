@@ -12,7 +12,8 @@ influencers who regurgitate information.
 ## What You Get
 
 A daily or weekly digest delivered to your preferred messaging app (Telegram, Discord,
-WhatsApp, etc.) with:
+WhatsApp, etc.) or via Gmail to a mailing list of your choice. Works on Windows,
+macOS, and Linux. Includes:
 
 - Summaries of new podcast episodes from top AI podcasts
 - Key posts and insights from 25 curated AI builders on X/Twitter
@@ -29,7 +30,7 @@ WhatsApp, etc.) with:
 The agent will ask you:
 - How often you want your digest (daily or weekly) and what time
 - What language you prefer
-- How you want it delivered (Telegram, email, or in-chat)
+- How you want it delivered (Telegram, Gmail email to a mailing list, or in-chat)
 
 No API keys needed — all content is fetched centrally.
 Your first digest arrives immediately after setup.
@@ -118,10 +119,18 @@ is fetched centrally and updated daily.
 
 See [examples/sample-digest.md](examples/sample-digest.md) for what the output looks like.
 
+## Catch-Up for Missed Digests
+
+If your machine is off when a scheduled digest runs, type `/ai catch-up` to get
+a digest covering all content you missed since your last delivery. The central
+feed keeps approximately 7 days of history — content older than that cannot
+be recovered.
+
 ## Privacy
 
 - No API keys are sent anywhere — all content is fetched centrally
-- If you use Telegram/email delivery, those keys are stored locally in `~/.follow-builders/.env`
+- If you use Telegram/email delivery, credentials are stored locally in `~/.follow-builders/.env` (Gmail app password or Telegram bot token — never your main password)
+- Email recipients are stored locally in `~/.follow-builders/mailing-list.txt`
 - The skill only reads public content (public blog posts, public YouTube videos, public X posts)
 - Your configuration, preferences, and reading history stay on your machine
 

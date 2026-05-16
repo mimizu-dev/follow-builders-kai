@@ -77,7 +77,7 @@ Tell the user:
 when you're not in this terminal. You have two options:
 
 1. **Telegram** — I'll send it as a Telegram message (free, takes ~5 min to set up)
-2. **Email** — I'll email it to you (requires a free Resend account)
+2. **Email** — I'll email it to you via Gmail (requires a Gmail account with 2FA enabled)
 
 Or you can skip this and just type /ai whenever you want your digest — but it
 won't arrive automatically."
@@ -100,14 +100,21 @@ curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" | python3 -c "import sy
 Save the chat ID in config.json under `delivery.chatId`.
 
 **If they choose Email:**
-Ask for their email address.
-Then they need a Resend API key:
-1. Go to https://resend.com
-2. Sign up (free tier gives 100 emails/day — more than enough)
-3. Go to API Keys in the dashboard
-4. Create a new key and copy it
+Ask for their Gmail address.
 
-Add the key to the .env file.
+Then walk them through creating a Gmail App Password (this is different from their regular Gmail password — it's a dedicated 16-character password for apps):
+1. Go to myaccount.google.com
+2. Click Security → 2-Step Verification (must already be enabled)
+3. Scroll to the bottom and click "App passwords"
+4. Select app: "Mail", device: "Other (Custom name)" → enter "Follow Builders"
+5. Click Generate — copy the 16-character password shown
+
+Ask for initial mailing list recipients:
+"Who should receive this digest? Enter one email address per line (press Enter twice when done — it can be just you)."
+
+Collect the addresses and write them to ~/.follow-builders/mailing-list.txt (one per line).
+
+Then run: `cd ${CLAUDE_SKILL_DIR}/scripts && npm install` to ensure all dependencies are installed.
 
 **If they choose on-demand:**
 Set `delivery.method` to `"stdout"`. Tell them: "No problem — just type /ai
@@ -131,11 +138,12 @@ Create the .env file with only the delivery key they need:
 ```bash
 mkdir -p ~/.follow-builders
 cat > ~/.follow-builders/.env << 'ENVEOF'
+# Gmail credentials for email delivery
+# GMAIL_USER=your.address@gmail.com
+# GMAIL_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
+
 # Telegram bot token (only if using Telegram delivery)
 # TELEGRAM_BOT_TOKEN=paste_your_token_here
-
-# Resend API key (only if using email delivery)
-# RESEND_API_KEY=paste_your_key_here
 ENVEOF
 ```
 
@@ -143,7 +151,7 @@ Uncomment only the line they need. Open the file for them to paste the key.
 
 Tell the user: "All podcast and X/Twitter content is fetched for you automatically
 from a central feed — no API keys needed for that. You only need a key for
-[Telegram/email] delivery."
+[Telegram delivery / Gmail app password for email] delivery."
 
 ### Step 6: Show Sources
 
@@ -432,6 +440,11 @@ open an issue at https://github.com/zarazhangrui/follow-builders."
 - "Change my email" → Update `delivery.email` in config.json
 - "Send to this chat instead" → Set `delivery.method` to "stdout"
 
+### Mailing List Changes
+- "Add [email] to my digest list" / "Add [email] to the mailing list" → append the address as a new line to `~/.follow-builders/mailing-list.txt`
+- "Remove [email] from my digest list" → delete the matching line from `~/.follow-builders/mailing-list.txt`
+- "Who's on my mailing list?" / "Show my mailing list" → read and display `~/.follow-builders/mailing-list.txt`, skipping comment lines
+
 ### Prompt Changes
 When a user wants to customize how their digest sounds, copy the relevant prompt
 file to `~/.follow-builders/prompts/` and edit it there. This way their
@@ -464,3 +477,20 @@ When the user invokes `/ai` or asks for their digest manually:
 1. Skip cron check — run the digest workflow immediately
 2. Use the same fetch → remix → deliver flow as the cron run
 3. Tell the user you're fetching fresh content (it takes a minute or two)
+
+### Catch-Up Mode
+
+When the user says `/ai catch-up`, "send me what I missed", "catch me up", or similar:
+
+1. Read `lastDeliveredAt` from `~/.follow-builders/config.json`
+2. If set, compute days missed:
+   ```js
+   Math.floor((Date.now() - new Date(lastDeliveredAt)) / 86400000)
+   ```
+3. Tell the user: "You've missed approximately N day(s) of digests (since [date in readable format]). Fetching everything available now..."
+4. Run the full digest workflow (Steps 2–6) — the central feed surfaces content not yet in `state-feed.json` automatically
+5. In the digest, use the catch-up header on the first line:
+   `AI Builders Digest — Catch-Up (since [Month D, YYYY])`
+6. Deliver via the normal email path and update `lastDeliveredAt`
+
+**Note:** The central feed keeps approximately 7 days of history. Content older than that is permanently unavailable from the feed. Tell the user if the gap exceeds 7 days: "The feed only keeps ~7 days of history, so some older content may not be available."

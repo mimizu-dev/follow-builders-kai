@@ -6,7 +6,7 @@
     "platform": {
       "type": "string",
       "enum": ["openclaw", "other"],
-      "description": "Detected platform: openclaw or other (Claude Code, Cursor, etc.)"
+      "description": "Detected platform: openclaw or other (Claude Code, Cursor, Hermes Agents, etc.)"
     },
     "language": {
       "type": "string",
@@ -44,7 +44,7 @@
           "type": "string",
           "enum": ["stdout", "telegram", "email"],
           "default": "stdout",
-          "description": "Delivery method: stdout (terminal/agent), telegram (bot message), email (via Resend)"
+          "description": "Delivery method: stdout (terminal/agent), telegram (bot message), email (via Gmail SMTP)"
         },
         "chatId": {
           "type": "string",
@@ -52,9 +52,14 @@
         },
         "email": {
           "type": "string",
-          "description": "Email address to send digest to (only for email method)"
+          "description": "Fallback email address if ~/.follow-builders/mailing-list.txt is empty (only for email method)"
         }
       }
+    },
+    "lastDeliveredAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of last successful email delivery. Written automatically by deliver.js. Used by catch-up mode to compute how many days were missed."
     },
     "onboardingComplete": {
       "type": "boolean",
